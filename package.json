@@ -18,7 +18,7 @@
   },
   "files": [
     "dist/",
-    "src/",
+    "compact-delta.js",
     "compact-delta.d.ts",
     "README.md",
     "LICENSE"
