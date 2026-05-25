@@ -1,0 +1,723 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>compact-delta · playground</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,900&family=JetBrains+Mono:wght@400;500;700&display=swap');
+
+  :root {
+    --bg: #faf6ef;
+    --paper: #fffdf8;
+    --ink: #1a1714;
+    --muted: #8a8178;
+    --line: #e4dccf;
+    --rule: #d8cdb9;
+    --copy: #2f6f4f;     /* COPY ops — green */
+    --copy-bg: #e3f0e6;
+    --ins: #b0431f;      /* INSERT/ADD ops — rust */
+    --ins-bg: #f6e3da;
+    --raw: #8a8178;
+    --accent: #c2410c;
+    --mono: 'JetBrains Mono', monospace;
+    --serif: 'Fraunces', Georgia, serif;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    background-image:
+      radial-gradient(circle at 12% 18%, rgba(194,65,12,0.05), transparent 30%),
+      radial-gradient(circle at 88% 8%, rgba(47,111,79,0.05), transparent 28%);
+    color: var(--ink);
+    font-family: var(--mono);
+    line-height: 1.5;
+    min-height: 100vh;
+    padding: 2.5rem 1.5rem 4rem;
+  }
+
+  .wrap { max-width: 1080px; margin: 0 auto; }
+
+  /* ── Masthead ── */
+  header { border-bottom: 3px double var(--rule); padding-bottom: 1.25rem; margin-bottom: 2rem; }
+  .kicker {
+    font-family: var(--mono); font-size: 0.7rem; letter-spacing: 0.35em;
+    text-transform: uppercase; color: var(--accent); margin-bottom: 0.5rem;
+  }
+  h1 {
+    font-family: var(--serif); font-weight: 900; font-size: clamp(2.4rem, 7vw, 4rem);
+    letter-spacing: -0.03em; line-height: 0.95; font-optical-sizing: auto;
+  }
+  h1 em { font-style: italic; color: var(--accent); font-weight: 400; }
+  .sub { font-size: 0.85rem; color: var(--muted); margin-top: 0.6rem; max-width: 60ch; }
+  .status {
+    margin-top: 0.75rem; font-size: 0.72rem; display: inline-flex; align-items: center; gap: 0.4rem;
+    padding: 0.2rem 0.6rem; border: 1px solid var(--line); border-radius: 2px; background: var(--paper);
+  }
+  .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); }
+  .dot.ok { background: var(--copy); }
+  .dot.err { background: var(--ins); }
+
+  /* ── Inputs ── */
+  .editors { display: grid; grid-template-columns: 1fr 1fr; gap: 1.25rem; margin-bottom: 1rem; }
+  @media (max-width: 720px) { .editors { grid-template-columns: 1fr; } }
+
+  .field label {
+    display: flex; justify-content: space-between; align-items: baseline;
+    font-size: 0.7rem; letter-spacing: 0.15em; text-transform: uppercase;
+    color: var(--muted); margin-bottom: 0.4rem;
+  }
+  .field label .cnt { color: var(--ink); font-weight: 700; letter-spacing: 0; }
+
+  textarea {
+    width: 100%; min-height: 170px; resize: vertical;
+    background: var(--paper); border: 1px solid var(--rule); border-radius: 3px;
+    padding: 0.85rem; color: var(--ink); font-family: var(--mono); font-size: 0.82rem;
+    line-height: 1.6; outline: none; transition: border-color 0.15s, box-shadow 0.15s;
+  }
+  textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(194,65,12,0.08); }
+
+  /* ── Presets ── */
+  .presets { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1.75rem; align-items: center; }
+  .presets .plabel { font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.15em; color: var(--muted); margin-right: 0.25rem; }
+  .chip {
+    font-family: var(--mono); font-size: 0.72rem; padding: 0.32rem 0.7rem;
+    background: var(--paper); border: 1px solid var(--rule); border-radius: 2px;
+    color: var(--ink); cursor: pointer; transition: all 0.13s;
+  }
+  .chip:hover { border-color: var(--accent); color: var(--accent); transform: translateY(-1px); }
+
+  /* ── Timing strip ── */
+  .timing {
+    display: grid; grid-template-columns: repeat(3, auto) 1fr; gap: 1.5rem; align-items: center;
+    border: 1px solid var(--rule); border-radius: 3px; background: var(--paper);
+    padding: 1rem 1.5rem; margin-bottom: 1.5rem;
+  }
+  @media (max-width: 720px) { .timing { grid-template-columns: repeat(3, 1fr); } .t-note { grid-column: 1 / -1; text-align: center; } }
+  .t-cell { display: flex; flex-direction: column; }
+  .t-num { font-family: var(--serif); font-weight: 900; font-size: 1.5rem; line-height: 1; letter-spacing: -0.02em; }
+  .t-lbl { font-size: 0.62rem; letter-spacing: 0.16em; text-transform: uppercase; color: var(--muted); margin-top: 0.25rem; }
+  .t-note { font-size: 0.68rem; color: var(--muted); text-align: right; }
+
+  /* ── Result headline ── */
+  .verdict {
+    border: 1px solid var(--rule); border-radius: 3px; background: var(--paper);
+    padding: 1.5rem; margin-bottom: 1.5rem; display: grid;
+    grid-template-columns: auto 1fr auto; gap: 1.5rem; align-items: center;
+  }
+  @media (max-width: 720px) { .verdict { grid-template-columns: 1fr; gap: 1rem; text-align: center; } }
+
+  .winner-badge {
+    font-family: var(--serif); font-weight: 900; font-size: 1.6rem; letter-spacing: -0.02em;
+    padding: 0.5rem 1.1rem; border-radius: 3px; text-transform: lowercase;
+  }
+  .winner-bytediff { background: var(--copy-bg); color: var(--copy); }
+  .winner-lcs { background: #e6e0f0; color: #5b3f8c; }
+  .winner-raw { background: #ece7df; color: var(--raw); }
+
+  .verdict-text { font-size: 0.85rem; }
+  .verdict-text strong { font-family: var(--serif); font-size: 1.05rem; }
+  .verdict-text .worth { font-size: 0.72rem; margin-top: 0.3rem; }
+  .worth-yes { color: var(--copy); }
+  .worth-no { color: var(--ins); }
+
+  .ratio-dial { text-align: center; }
+  .ratio-num { font-family: var(--serif); font-weight: 900; font-size: 2.6rem; line-height: 1; letter-spacing: -0.03em; }
+  .ratio-lbl { font-size: 0.62rem; letter-spacing: 0.18em; text-transform: uppercase; color: var(--muted); margin-top: 0.2rem; }
+
+  /* ── Candidate bars ── */
+  .section-title {
+    font-family: var(--mono); font-size: 0.7rem; letter-spacing: 0.2em; text-transform: uppercase;
+    color: var(--muted); margin: 0 0 0.75rem; padding-bottom: 0.35rem; border-bottom: 1px solid var(--line);
+  }
+  .bars { margin-bottom: 1.75rem; }
+  .bar-row { display: grid; grid-template-columns: 90px 1fr 80px; gap: 0.75rem; align-items: center; margin-bottom: 0.5rem; }
+  .bar-name { font-size: 0.75rem; font-weight: 700; }
+  .bar-track { background: #efe8db; border-radius: 2px; height: 22px; overflow: hidden; position: relative; }
+  .bar-fill { height: 100%; border-radius: 2px; transition: width 0.4s cubic-bezier(.2,.8,.2,1); min-width: 2px; }
+  .bar-fill.f-raw { background: repeating-linear-gradient(45deg, #cfc6b5, #cfc6b5 6px, #d8cfbf 6px, #d8cfbf 12px); }
+  .bar-fill.f-bytediff { background: var(--copy); }
+  .bar-fill.f-lcs { background: #7c5cb8; }
+  .bar-val { font-size: 0.74rem; text-align: right; color: var(--muted); }
+  .bar-row.is-winner .bar-name { color: var(--accent); }
+  .bar-row.is-winner .bar-val { color: var(--ink); font-weight: 700; }
+  .crown { color: var(--accent); }
+
+  /* ── Op stream visualization ── */
+  .opstream {
+    border: 1px solid var(--rule); border-radius: 3px; background: var(--paper);
+    padding: 1rem; margin-bottom: 1.5rem; min-height: 60px;
+    font-size: 0.78rem; line-height: 2.1; word-break: break-word;
+  }
+  .op { display: inline-block; padding: 0.1rem 0.5rem; border-radius: 2px; margin: 0.15rem 0.2rem 0.15rem 0; white-space: pre-wrap; }
+  .op-copy { background: var(--copy-bg); color: var(--copy); }
+  .op-ins { background: var(--ins-bg); color: var(--ins); }
+  .op-meta { font-size: 0.62rem; opacity: 0.7; }
+
+  /* ── Hex dump ── */
+  .hexdump {
+    border: 1px solid var(--rule); border-radius: 3px; background: #1a1714; color: #d8cdb9;
+    padding: 1rem; font-size: 0.72rem; line-height: 1.7; overflow-x: auto; white-space: pre;
+    margin-bottom: 1rem;
+  }
+  .hexdump .tag { color: var(--accent); font-weight: 700; }
+  .hexdump .addr { color: #6b6358; }
+  .hexdump .ascii { color: #9aae8c; }
+
+  /* ── Roundtrip check ── */
+  .rt { font-size: 0.78rem; padding: 0.6rem 0.9rem; border-radius: 3px; margin-bottom: 1.5rem; }
+  .rt-ok { background: var(--copy-bg); color: var(--copy); border: 1px solid #bcd9c2; }
+  .rt-err { background: var(--ins-bg); color: var(--ins); border: 1px solid #e3bda9; }
+
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
+  @media (max-width: 720px) { .grid2 { grid-template-columns: 1fr; } }
+
+  footer { margin-top: 3rem; padding-top: 1.25rem; border-top: 1px solid var(--line); font-size: 0.7rem; color: var(--muted); }
+  code.inline { background: #efe8db; padding: 0.1rem 0.35rem; border-radius: 2px; font-size: 0.92em; }
+  a { color: var(--accent); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="kicker">binary delta · playground</div>
+    <h1>compact&#8209;<em>delta</em></h1>
+    <p class="sub">Edit the two texts below. The library tries every method, picks the smallest, and shows you exactly what it chose and why. Loaded as an external ES module — nothing inline.</p>
+    <div class="status" id="status"><span class="dot" id="statusDot"></span><span id="statusText">loading module…</span></div>
+  </header>
+
+  <div class="editors">
+    <div class="field">
+      <label>base <span class="cnt"><span id="baseCnt">0</span> B</span></label>
+      <textarea id="base" spellcheck="false"></textarea>
+    </div>
+    <div class="field">
+      <label>target <span class="cnt"><span id="targetCnt">0</span> B</span></label>
+      <textarea id="target" spellcheck="false"></textarea>
+    </div>
+  </div>
+
+  <div class="presets">
+    <span class="plabel">short:</span>
+    <button class="chip" data-preset="sdp">SDP offer→answer</button>
+    <button class="chip" data-preset="sub">in-place edits</button>
+    <button class="chip" data-preset="move">block reorder</button>
+    <button class="chip" data-preset="dup">duplication</button>
+    <button class="chip" data-preset="json">JSON tweak</button>
+    <button class="chip" data-preset="new">brand-new text</button>
+  </div>
+  <div class="presets">
+    <span class="plabel">long / multi&#8209;part:</span>
+    <button class="chip" data-preset="mediaSdp">full media SDP</button>
+    <button class="chip" data-preset="config">config (scattered)</button>
+    <button class="chip" data-preset="logs">log timestamps</button>
+    <button class="chip" data-preset="csv">CSV + new row</button>
+    <button class="chip" data-preset="code">code refactor</button>
+    <button class="chip" data-preset="prose">prose rewrite</button>
+    <button class="chip" data-preset="htmlRows">HTML rows ×N</button>
+    <button class="chip" data-preset="markdown">long article edit</button>
+  </div>
+
+  <div id="output" style="display:none">
+    <div class="verdict">
+      <div><span class="winner-badge" id="winnerBadge">—</span></div>
+      <div class="verdict-text">
+        <strong id="verdictHeadline">—</strong>
+        <div id="verdictDetail" style="color:var(--muted); margin-top:0.2rem;"></div>
+        <div class="worth" id="worthLine"></div>
+      </div>
+      <div class="ratio-dial">
+        <div class="ratio-num" id="ratioNum">—</div>
+        <div class="ratio-lbl">of original</div>
+      </div>
+    </div>
+
+    <div class="timing" id="timing">
+      <div class="t-cell"><span class="t-num" id="tEncode">—</span><span class="t-lbl">encode</span></div>
+      <div class="t-cell"><span class="t-num" id="tDecode">—</span><span class="t-lbl">decode</span></div>
+      <div class="t-cell"><span class="t-num" id="tThroughput">—</span><span class="t-lbl">encodes / sec</span></div>
+      <div class="t-note" id="tNote">averaged over repeated runs</div>
+    </div>
+
+    <div class="bars">
+      <div class="section-title">candidate sizes (smaller wins)</div>
+      <div id="barList"></div>
+    </div>
+
+    <div class="rt" id="rtBox"></div>
+
+    <div class="grid2">
+      <div>
+        <div class="section-title">decoded op stream</div>
+        <div class="opstream" id="opStream"></div>
+      </div>
+      <div>
+        <div class="section-title">delta bytes (hex)</div>
+        <div class="hexdump" id="hexDump"></div>
+      </div>
+    </div>
+  </div>
+
+  <footer>
+    <code class="inline">&lt;script src="./dist/compact-delta.umd.js"&gt;&lt;/script&gt;</code> — Apache-2.0.
+    Plain global build — just open this file directly in a browser (no server needed).
+  </footer>
+</div>
+
+<!-- External library, plain UMD build — loads over file:// with no server -->
+<script src="./dist/compact-delta.umd.js"></script>
+<script>
+  const $ = id => document.getElementById(id);
+  const enc = new TextEncoder();
+
+  // ── External library, loaded as a plain global (no module system) ──
+  const lib = window.compactDelta;
+  if (!lib) {
+    $('statusDot').className = 'dot err';
+    $('statusText').textContent = 'failed to load ./dist/compact-delta.umd.js';
+    throw new Error('compact-delta global not found');
+  }
+  const { tryEncode, decode, decodeString, inspect, METHODS } = lib;
+
+  $('statusDot').classList.add('ok');
+  $('statusText').textContent = 'library loaded · ./dist/compact-delta.umd.js';
+
+  const PRESETS = {
+    sdp: {
+      base: `v=0
+o=- 4611731400430051336 2 IN IP4 127.0.0.1
+s=-
+t=0 0
+a=group:BUNDLE 0
+m=application 9 UDP/DTLS/SCTP webrtc-datachannel
+c=IN IP4 0.0.0.0
+a=ice-ufrag:F7gK
+a=ice-pwd:x9Wd6dZ2vQpL3mNzR8kTyA1b
+a=ice-options:trickle
+a=fingerprint:sha-256 4A:AD:B9:B1:3F:82:18:3B:54:02:12:DF:3E:5D:49:6B:19
+a=setup:actpass
+a=mid:0
+a=sctp-port:5000`,
+      target: `v=0
+o=- 4611731400430051336 2 IN IP4 127.0.0.1
+s=-
+t=0 0
+a=group:BUNDLE 0
+m=application 9 UDP/DTLS/SCTP webrtc-datachannel
+c=IN IP4 0.0.0.0
+a=ice-ufrag:Qz3T
+a=ice-pwd:m2Kp9LdW7sBnRtY4xH6cVe0j
+a=ice-options:trickle
+a=fingerprint:sha-256 7C:11:E2:88:5A:6F:99:01:DD:84:5C:7B:5E:3C:DF:4A
+a=setup:active
+a=mid:0
+a=sctp-port:5000`
+    },
+    sub: {
+      base: 'config = { port: 8080, host: "localhost", timeout: 30, retries: 3, debug: false }',
+      target: 'config = { port: 9090, host: "localhost", timeout: 60, retries: 5, debug: false }'
+    },
+    move: {
+      base: 'SECTION ALPHA: introduction text. SECTION BETA: the main body content. SECTION GAMMA: the closing notes.',
+      target: 'SECTION GAMMA: the closing notes. SECTION ALPHA: introduction text. SECTION BETA: the main body content.'
+    },
+    dup: {
+      base: 'The license header goes at the top of every single source file in this repository.',
+      target: 'The license header goes at the top of every single source file in this repository. The license header goes at the top of every single source file in this repository.'
+    },
+    new: {
+      base: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      target: 'A completely different sentence with no relation to the base whatsoever.'
+    },
+    json: {
+      base: '{"user":"alice","role":"editor","active":true,"lastSeen":"2025-01-10","score":420}',
+      target: '{"user":"alice","role":"admin","active":true,"lastSeen":"2025-05-21","score":815}'
+    },
+
+    mediaSdp: {
+      base: `v=0
+o=- 4611731400430051336 2 IN IP4 127.0.0.1
+s=-
+t=0 0
+a=group:BUNDLE 0 1 2
+a=msid-semantic: WMS stream0
+m=audio 9 UDP/TLS/RTP/SAVPF 111 103 104
+c=IN IP4 0.0.0.0
+a=rtpmap:111 opus/48000/2
+a=fmtp:111 minptime=10;useinbandfec=1
+a=ice-ufrag:F7gK
+a=ice-pwd:x9Wd6dZ2vQpL3mNzR8kTyA1b
+a=fingerprint:sha-256 4A:AD:B9:B1:3F:82:18:3B:54:02:12:DF:3E:5D:49:6B:19
+a=setup:actpass
+a=mid:0
+a=sendrecv
+m=video 9 UDP/TLS/RTP/SAVPF 96 97 98
+a=rtpmap:96 VP8/90000
+a=rtpmap:98 H264/90000
+a=ice-ufrag:F7gK
+a=ice-pwd:x9Wd6dZ2vQpL3mNzR8kTyA1b
+a=setup:actpass
+a=mid:1
+a=sendrecv`,
+      target: `v=0
+o=- 4611731400430051336 2 IN IP4 127.0.0.1
+s=-
+t=0 0
+a=group:BUNDLE 0 1 2
+a=msid-semantic: WMS stream0
+m=audio 9 UDP/TLS/RTP/SAVPF 111 103 104
+c=IN IP4 0.0.0.0
+a=rtpmap:111 opus/48000/2
+a=fmtp:111 minptime=10;useinbandfec=1
+a=ice-ufrag:Qz3T
+a=ice-pwd:m2Kp9LdW7sBnRtY4xH6cVe0j
+a=fingerprint:sha-256 7C:11:E2:88:5A:6F:99:01:DD:84:5C:7B:5E:3C:DF:4A
+a=setup:active
+a=mid:0
+a=sendrecv
+m=video 9 UDP/TLS/RTP/SAVPF 96 97 98
+a=rtpmap:96 VP8/90000
+a=rtpmap:98 H264/90000
+a=ice-ufrag:Qz3T
+a=ice-pwd:m2Kp9LdW7sBnRtY4xH6cVe0j
+a=setup:active
+a=mid:1
+a=recvonly`
+    },
+
+    config: {
+      base: `server.host=localhost
+server.port=8080
+server.timeout=30000
+db.host=db.internal
+db.port=5432
+db.pool.min=5
+db.pool.max=20
+cache.enabled=true
+cache.ttl=3600
+log.level=info
+log.format=json
+feature.beta=false
+feature.dark=true
+metrics.interval=60`,
+      target: `server.host=0.0.0.0
+server.port=9090
+server.timeout=60000
+db.host=db.internal
+db.port=5432
+db.pool.min=10
+db.pool.max=50
+cache.enabled=true
+cache.ttl=7200
+log.level=debug
+log.format=json
+feature.beta=true
+feature.dark=true
+metrics.interval=15`
+    },
+
+    logs: {
+      base: `[2025-01-10 08:15:23] INFO  Starting service v1.2.0
+[2025-01-10 08:15:24] INFO  Connected to database pool
+[2025-01-10 08:15:25] WARN  Cache miss for key user:42
+[2025-01-10 08:15:26] INFO  Request GET /api/users handled in 12ms
+[2025-01-10 08:15:27] INFO  Background job queued: cleanup
+[2025-01-10 08:15:28] DEBUG Heartbeat ping sent to monitor`,
+      target: `[2025-05-21 14:30:01] INFO  Starting service v1.4.2
+[2025-05-21 14:30:02] INFO  Connected to database pool
+[2025-05-21 14:30:03] ERROR Cache miss for key user:99
+[2025-05-21 14:30:04] INFO  Request GET /api/users handled in 45ms
+[2025-05-21 14:30:05] INFO  Background job queued: cleanup
+[2025-05-21 14:30:06] DEBUG Heartbeat ping sent to monitor`
+    },
+
+    csv: {
+      base: `id,name,department,score,status
+1,Alice Johnson,Engineering,420,active
+2,Bob Smith,Design,380,active
+3,Carol White,Marketing,510,inactive
+4,Dave Brown,Engineering,290,active
+5,Eve Davis,Sales,475,active`,
+      target: `id,name,department,score,status
+1,Alice Johnson,Engineering,815,active
+2,Bob Smith,Design,380,active
+3,Carol White,Marketing,510,active
+4,Dave Brown,Engineering,290,inactive
+5,Eve Davis,Sales,475,active
+6,Frank Miller,Support,640,active`
+    },
+
+    code: {
+      base: `function calculateTotal(items) {
+  let total = 0;
+  for (let i = 0; i < items.length; i++) {
+    total += items[i].price;
+  }
+  return total;
+}
+
+function applyDiscount(total, pct) {
+  return total - (total * pct / 100);
+}`,
+      target: `function calculateTotal(items, taxRate = 0) {
+  let total = 0;
+  for (const item of items) {
+    total += item.price * (1 + taxRate);
+  }
+  return Math.round(total * 100) / 100;
+}
+
+function applyDiscount(total, pct) {
+  return total - (total * pct / 100);
+}`
+    },
+
+    prose: {
+      base: `The quick brown fox jumps over the lazy dog. This sentence contains every letter of the alphabet. It is often used for testing fonts and keyboards. The phrase has been popular since the late nineteenth century, appearing in typing manuals and printer samples worldwide.`,
+      target: `The quick brown fox leaps over the sleepy cat. This sentence contains every letter of the alphabet. It is frequently used for testing fonts and displays. The phrase has remained popular since the late nineteenth century, appearing in typing manuals and printer samples across the globe.`
+    },
+
+    htmlRows: {
+      base: `<table>
+  <tr><td>Alice</td><td>Engineer</td><td>active</td></tr>
+</table>`,
+      target: `<table>
+  <tr><td>Alice</td><td>Engineer</td><td>active</td></tr>
+  <tr><td>Bob</td><td>Designer</td><td>active</td></tr>
+  <tr><td>Carol</td><td>Engineer</td><td>away</td></tr>
+  <tr><td>Alice</td><td>Engineer</td><td>active</td></tr>
+</table>`
+    },
+
+    markdown: {
+      base: `# Getting Started
+
+Welcome to the project. This guide walks you through installation and basic usage.
+
+## Installation
+
+Run the following command to install:
+
+    npm install our-package
+
+## Usage
+
+Import the module and call the main function. It accepts an options object.
+
+## License
+
+Released under the MIT license.`,
+      target: `# Getting Started
+
+Welcome to the project! This guide walks you through installation, configuration, and basic usage.
+
+## Installation
+
+Run the following command to install from npm:
+
+    npm install our-package --save
+
+## Configuration
+
+Create a config file in your project root before first use.
+
+## Usage
+
+Import the module and call the main function. It accepts an options object with several fields.
+
+## License
+
+Released under the Apache-2.0 license.`
+    }
+  };
+
+  function escapeHtml(s) {
+    return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+
+  // Parse our delta payload into structured ops (mirrors the wire format).
+  function parseOps(tag, delta) {
+    const ops = [];
+    let i = 1; // skip method tag
+    const vint = () => { let r=0,sh=0,b; do{ b=delta[i++]; r|=(b&0x7f)<<sh; sh+=7; }while(b&0x80); return r>>>0; };
+    if (tag === METHODS.RAW) {
+      ops.push({ t:'RAW', len: delta.length - 1 });
+    } else if (tag === METHODS.BYTEDIFF) {
+      while (i < delta.length) {
+        const op = delta[i++];
+        if (op === 0) { const off=vint(), len=vint(); ops.push({ t:'COPY', off, len }); }
+        else { const len=vint(); const bytes=delta.subarray(i,i+len); i+=len; ops.push({ t:'INSERT', bytes }); }
+      }
+    } else if (tag === METHODS.LCS) {
+      while (i < delta.length) {
+        const op = delta[i++]; const len = vint();
+        if (op === 0) ops.push({ t:'COPY', len });            // EQUAL → copy from base
+        else if (op === 2) ops.push({ t:'SKIP', len });        // DELETE → skip base
+        else { const bytes=delta.subarray(i,i+len); i+=len; ops.push({ t:'INSERT', bytes }); }
+      }
+    }
+    return ops;
+  }
+
+  function renderOps(ops, dec) {
+    if (!ops.length) return '<span style="color:var(--muted)">— empty —</span>';
+    return ops.map(op => {
+      if (op.t === 'COPY')
+        return `<span class="op op-copy">COPY <span class="op-meta">${op.off!=null?'@'+op.off+' ':''}×${op.len}</span></span>`;
+      if (op.t === 'SKIP')
+        return `<span class="op op-meta" style="text-decoration:line-through;opacity:0.5">skip ${op.len}</span>`;
+      if (op.t === 'RAW')
+        return `<span class="op" style="background:#ece7df;color:var(--raw)">RAW <span class="op-meta">×${op.len}</span></span>`;
+      // INSERT
+      const txt = dec.decode(op.bytes);
+      return `<span class="op op-ins">+"${escapeHtml(txt)}"</span>`;
+    }).join('');
+  }
+
+  function hexDump(delta) {
+    const dec = new TextDecoder('latin1');
+    let out = '';
+    for (let off = 0; off < delta.length; off += 16) {
+      const slice = delta.subarray(off, off + 16);
+      const addr = off.toString(16).padStart(4, '0');
+      let hex = '', ascii = '';
+      for (let j = 0; j < 16; j++) {
+        if (j < slice.length) {
+          const b = slice[j];
+          const isTag = (off + j) === 0;
+          const h = b.toString(16).padStart(2, '0');
+          hex += isTag ? `<span class="tag">${h}</span> ` : h + ' ';
+          ascii += (b >= 32 && b < 127) ? String.fromCharCode(b) : '·';
+        } else { hex += '   '; }
+        if (j === 7) hex += ' ';
+      }
+      out += `<span class="addr">${addr}</span>  ${hex} <span class="ascii">${escapeHtml(ascii)}</span>\n`;
+    }
+    return out;
+  }
+
+  function run() {
+    const base = $('base').value;
+    const target = $('target').value;
+    $('baseCnt').textContent = enc.encode(base).length;
+    $('targetCnt').textContent = enc.encode(target).length;
+
+    if (!target) { $('output').style.display = 'none'; return; }
+    $('output').style.display = 'block';
+
+    // callback API: tryEncode → inspect → decodeString, then render
+    tryEncode(base, target, function (err, result) {
+      if (err) { showErr(err); return; }
+      inspect(base, target, function (err2, info) {
+        if (err2) { showErr(err2); return; }
+        const delta = result.delta;
+        decodeString(base, delta, function (err3, decoded) {
+          if (err3) { showErr(err3); return; }
+          render(base, target, result, info, delta, decoded === target);
+        });
+      });
+    });
+  }
+
+  function showErr(e) {
+    $('statusDot').className = 'dot err';
+    $('statusText').textContent = 'error: ' + e.message;
+  }
+
+  function render(base, target, result, info, delta, decodedOk) {
+    // verdict
+    const badge = $('winnerBadge');
+    badge.textContent = result.method;
+    badge.className = 'winner-badge winner-' + result.method;
+
+    const names = {
+      raw: 'Raw — full target sent verbatim',
+      bytediff: 'Bytediff — copy/insert via rolling hash',
+      lcs: 'LCS — Myers diff, binary encoded'
+    };
+    $('verdictHeadline').textContent = names[result.method];
+    $('verdictDetail').textContent =
+      `${result.size} bytes delta · target is ${result.raw} bytes · saved ${result.raw - result.size} bytes`;
+    const worth = $('worthLine');
+    if (result.worthwhile) { worth.className = 'worth worth-yes'; worth.textContent = '✓ worthwhile — a delta method beat sending the full target'; }
+    else { worth.className = 'worth worth-no'; worth.textContent = '✕ not worthwhile — RAW won; consider gzip or sending full'; }
+
+    $('ratioNum').textContent = Math.round(result.ratio * 100) + '%';
+
+    // candidate bars
+    const cands = info.candidates;
+    const maxSize = Math.max(...Object.values(cands), result.raw);
+    const order = ['raw','bytediff','lcs'];
+    $('barList').innerHTML = order.filter(k => cands[k] != null).map(k => {
+      const size = cands[k];
+      const pct = (size / maxSize) * 100;
+      const isWin = info.method === k;
+      return `<div class="bar-row ${isWin?'is-winner':''}">
+        <div class="bar-name">${k}${isWin?' <span class="crown">♛</span>':''}</div>
+        <div class="bar-track"><div class="bar-fill f-${k}" style="width:${pct}%"></div></div>
+        <div class="bar-val">${size} B</div>
+      </div>`;
+    }).join('');
+
+    // roundtrip
+    const rt = $('rtBox');
+    if (decodedOk) { rt.className = 'rt rt-ok'; rt.textContent = '✓ roundtrip verified — decode(base, delta) reproduces the target exactly'; }
+    else { rt.className = 'rt rt-err'; rt.textContent = '✕ roundtrip FAILED — decoded output does not match target'; }
+
+    // op stream + hex
+    const dec = new TextDecoder();
+    const ops = parseOps(delta[0], delta);
+    $('opStream').innerHTML = renderOps(ops, dec);
+    $('hexDump').innerHTML = hexDump(delta);
+
+    // ── timing: throughput measured by completing many async encodes ──
+    measureTiming(base, target, delta);
+  }
+
+  // Measure round-trip throughput including the async dispatch (the real cost
+  // for the callback API). Fires batches and times to completion.
+  function measureTiming(base, target, delta) {
+    const RUNS = 1500;
+    $('tNote').textContent = 'measuring…';
+    let doneE = 0; const t0 = performance.now();
+    for (let i = 0; i < RUNS; i++) {
+      tryEncode(base, target, function () {
+        if (++doneE === RUNS) {
+          const encUs = (performance.now() - t0) * 1000 / RUNS;
+          let doneD = 0; const d0 = performance.now();
+          for (let j = 0; j < RUNS; j++) {
+            decode(base, delta, function () {
+              if (++doneD === RUNS) {
+                const decUs = (performance.now() - d0) * 1000 / RUNS;
+                const fmt = us => us < 1 ? us.toFixed(2)+' µs' : us < 1000 ? us.toFixed(1)+' µs' : (us/1000).toFixed(2)+' ms';
+                $('tEncode').textContent = fmt(encUs);
+                $('tDecode').textContent = fmt(decUs);
+                $('tThroughput').textContent = Math.round(1e6 / encUs).toLocaleString();
+                $('tNote').textContent = `incl. async dispatch · avg of ${RUNS.toLocaleString()} runs`;
+              }
+            });
+          }
+        }
+      });
+    }
+  }
+
+  // wire up
+  $('base').addEventListener('input', run);
+  $('target').addEventListener('input', run);
+  document.querySelectorAll('.chip').forEach(c => c.addEventListener('click', () => {
+    const p = PRESETS[c.dataset.preset];
+    $('base').value = p.base;
+    $('target').value = p.target;
+    run();
+  }));
+
+  // start with the SDP preset
+  $('base').value = PRESETS.sdp.base;
+  $('target').value = PRESETS.sdp.target;
+  run();
+</script>
+</body>
+</html>

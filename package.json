@@ -1,0 +1,61 @@
+{
+  "name": "compact-delta",
+  "version": "1.0.0",
+  "description": "Generic optimal binary delta compression - auto-picks the smallest encoding (copy/insert, Myers LCS, or raw). Zero dependencies, works in Node and the browser.",
+  "type": "module",
+  "main": "./dist/compact-delta.cjs",
+  "module": "./dist/compact-delta.mjs",
+  "browser": "./dist/compact-delta.cjs",
+  "types": "./compact-delta.d.ts",
+  "exports": {
+    ".": {
+      "types": "./compact-delta.d.ts",
+      "import": "./dist/compact-delta.mjs",
+      "require": "./dist/compact-delta.cjs",
+      "default": "./dist/compact-delta.cjs"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist/",
+    "src/",
+    "compact-delta.d.ts",
+    "README.md",
+    "LICENSE"
+  ],
+  "sideEffects": false,
+  "scripts": {
+    "build": "node build.cjs"
+  },
+  "keywords": [
+    "delta",
+    "delta-compression",
+    "delta-encoding",
+    "binary-diff",
+    "diff",
+    "patch",
+    "rolling-hash",
+    "myers",
+    "vcdiff",
+    "compression",
+    "esm"
+  ],
+  "author": {
+    "name": "colocohen"
+  },
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/colocohen/compact-delta.git"
+  },
+  "bugs": {
+    "url": "https://github.com/colocohen/compact-delta/issues"
+  },
+  "homepage": "https://github.com/colocohen/compact-delta#readme",
+  "funding": [
+    {
+      "type": "github",
+      "url": "https://github.com/sponsors/colocohen"
+    }
+  ]
+}
