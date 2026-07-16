@@ -65,7 +65,11 @@ ${indentedBody}
 `;
 
 fs.writeFileSync(path.join(DIST, 'compact-delta.cjs'), umd);
+// 3) The same UMD under the .umd.js name — this is what the README's
+//    <script src="./dist/compact-delta.umd.js"> and the playground load.
+fs.writeFileSync(path.join(DIST, 'compact-delta.umd.js'), umd);
 
 console.log('Built:');
-console.log('  dist/compact-delta.mjs  (ESM)  ', fs.statSync(path.join(DIST,'compact-delta.mjs')).size, 'bytes');
-console.log('  dist/compact-delta.cjs  (UMD)  ', fs.statSync(path.join(DIST,'compact-delta.cjs')).size, 'bytes');
+console.log('  dist/compact-delta.mjs     (ESM)  ', fs.statSync(path.join(DIST,'compact-delta.mjs')).size, 'bytes');
+console.log('  dist/compact-delta.cjs     (UMD)  ', fs.statSync(path.join(DIST,'compact-delta.cjs')).size, 'bytes');
+console.log('  dist/compact-delta.umd.js  (UMD)  ', fs.statSync(path.join(DIST,'compact-delta.umd.js')).size, 'bytes');

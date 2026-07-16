@@ -48,6 +48,25 @@ export interface EncodeOptions {
    * Set e.g. `0.9` to require at least a 10% reduction.
    */
   minRatio?: number;
+  /**
+   * BYTEDIFF minimum match window in bytes (default `16`, allowed 4–1024).
+   * Smaller windows find shorter matches — useful for data with dense, tiny
+   * edits — at the cost of more per-match overhead and a slower encode.
+   * Encoder-side only: the wire format is unaffected, any decoder reads it.
+   */
+  window?: number;
+  /**
+   * Maximum time budget (ms) for the Myers/LCS pass (default `1000`).
+   * In auto mode the actual budget is scaled down by how much room for
+   * improvement remains after BYTEDIFF, so cheap wins stay cheap.
+   */
+  lcsMs?: number;
+  /**
+   * Auto mode only: always run every method with the full budget, instead of
+   * the adaptive policy that skips LCS when BYTEDIFF already produced a tiny
+   * delta. Guarantees the minimal result at the cost of encode time.
+   */
+  exhaustive?: boolean;
 }
 
 /** @deprecated Renamed to {@link EncodeOptions}; kept as an alias. */
@@ -73,6 +92,13 @@ export interface EncodeResult {
   raw: number;
   /** `size / raw` (0 when target is empty). */
   ratio: number;
+  /**
+   * Sizes each candidate method produced during selection (including the
+   * 1-byte tag). `null` on short-circuit paths (identical inputs / empty
+   * base) or when a method was forced; `lcs` is absent when the adaptive
+   * policy skipped it (pass `exhaustive: true` to always include it).
+   */
+  candidates: { raw: number; bytediff?: number; lcs?: number } | null;
 }
 
 /** Diagnostic breakdown returned by {@link inspect}. */

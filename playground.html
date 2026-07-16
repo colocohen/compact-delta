@@ -607,18 +607,26 @@ Released under the Apache-2.0 license.`
     if (!target) { $('output').style.display = 'none'; return; }
     $('output').style.display = 'block';
 
-    // callback API: tryEncode → inspect → decodeString, then render
-    tryEncode(base, target, function (err, result) {
+    // One tryEncode call. Newer builds return `candidates` on the result
+    // (exhaustive forces all methods to run so all three bars render);
+    // older builds ignore the option and we fall back to inspect().
+    tryEncode(base, target, { exhaustive: true }, function (err, result) {
       if (err) { showErr(err); return; }
-      inspect(base, target, function (err2, info) {
-        if (err2) { showErr(err2); return; }
-        const delta = result.delta;
-        decodeString(base, delta, function (err3, decoded) {
+      const finish = info => {
+        decodeString(base, result.delta, function (err3, decoded) {
           if (err3) { showErr(err3); return; }
-          render(base, target, result, info, delta, decoded === target);
+          showOk();
+          render(base, target, result, info, result.delta, decoded === target);
         });
-      });
+      };
+      if (result.candidates) finish(result);
+      else inspect(base, target, (err2, info) => err2 ? showErr(err2) : finish(info));
     });
+  }
+
+  function showOk() {
+    $('statusDot').className = 'dot ok';
+    $('statusText').textContent = 'library loaded · ./dist/compact-delta.umd.js';
   }
 
   function showErr(e) {
@@ -677,36 +685,54 @@ Released under the Apache-2.0 license.`
   }
 
   // Measure round-trip throughput including the async dispatch (the real cost
-  // for the callback API). Fires batches and times to completion.
+  // for the callback API). Time-budgeted sequential runs instead of a fixed
+  // parallel batch: a generation token cancels stale measurements when the
+  // user keeps typing, and every few runs we yield to the event loop so the
+  // page never freezes — even on inputs where a single encode is slow.
+  let timingGen = 0;
   function measureTiming(base, target, delta) {
-    const RUNS = 1500;
+    const gen = ++timingGen;
+    const BUDGET_MS = 250, MAX_RUNS = 2000, YIELD_EVERY = 25;
     $('tNote').textContent = 'measuring…';
-    let doneE = 0; const t0 = performance.now();
-    for (let i = 0; i < RUNS; i++) {
-      tryEncode(base, target, function () {
-        if (++doneE === RUNS) {
-          const encUs = (performance.now() - t0) * 1000 / RUNS;
-          let doneD = 0; const d0 = performance.now();
-          for (let j = 0; j < RUNS; j++) {
-            decode(base, delta, function () {
-              if (++doneD === RUNS) {
-                const decUs = (performance.now() - d0) * 1000 / RUNS;
-                const fmt = us => us < 1 ? us.toFixed(2)+' µs' : us < 1000 ? us.toFixed(1)+' µs' : (us/1000).toFixed(2)+' ms';
-                $('tEncode').textContent = fmt(encUs);
-                $('tDecode').textContent = fmt(decUs);
-                $('tThroughput').textContent = Math.round(1e6 / encUs).toLocaleString();
-                $('tNote').textContent = `incl. async dispatch · avg of ${RUNS.toLocaleString()} runs`;
-              }
-            });
-          }
-        }
+
+    const fmt = us => us < 1 ? us.toFixed(2)+' µs' : us < 1000 ? us.toFixed(1)+' µs' : (us/1000).toFixed(2)+' ms';
+    const step = (fn, done) => {
+      let runs = 0; const t0 = performance.now();
+      (function loop() {
+        if (gen !== timingGen) return; // a newer measurement started — abandon
+        fn(function () {
+          if (gen !== timingGen) return;
+          runs++;
+          const elapsed = performance.now() - t0;
+          if (elapsed < BUDGET_MS && runs < MAX_RUNS) {
+            // yield to the event loop periodically so rendering isn't starved
+            if (runs % YIELD_EVERY === 0) setTimeout(loop, 0);
+            else loop();
+          } else done(elapsed * 1000 / runs, runs);
+        });
+      })();
+    };
+
+    step(cb => tryEncode(base, target, cb), (encUs, encRuns) => {
+      step(cb => decode(base, delta, cb), (decUs) => {
+        $('tEncode').textContent = fmt(encUs);
+        $('tDecode').textContent = fmt(decUs);
+        $('tThroughput').textContent = Math.round(1e6 / encUs).toLocaleString();
+        $('tNote').textContent = `incl. async dispatch · avg of ${encRuns.toLocaleString()} runs (${BUDGET_MS}ms budget)`;
       });
-    }
+    });
   }
 
-  // wire up
-  $('base').addEventListener('input', run);
-  $('target').addEventListener('input', run);
+  // wire up — byte counters update instantly, the heavy run() is debounced
+  let debounceTimer = 0;
+  function onInput() {
+    $('baseCnt').textContent = enc.encode($('base').value).length;
+    $('targetCnt').textContent = enc.encode($('target').value).length;
+    clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(run, 150);
+  }
+  $('base').addEventListener('input', onInput);
+  $('target').addEventListener('input', onInput);
   document.querySelectorAll('.chip').forEach(c => c.addEventListener('click', () => {
     const p = PRESETS[c.dataset.preset];
     $('base').value = p.base;
